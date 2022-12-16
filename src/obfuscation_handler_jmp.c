@@ -2,6 +2,7 @@
 
 #include "obfuscation_handler_jmp.h"
 
+#include "pattern.h"
 #include "x64_util.h"
 #include "win32_util.h"
 
@@ -28,6 +29,13 @@ bool obfuscation_handler_jmp(const struct deob_context* const context, uint8_t**
     const uintptr_t va_lea = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(segment_addresses[1] - context->deob_begin));
     const uintptr_t va_source = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(segment_addresses[0] - context->deob_begin));
     const uintptr_t va_target = x64_calc_rel32(va_lea + 3, *(int32_t*)(segment_addresses[1] + 3), 0);
+
+    const size_t section_count = pattern_get_section_count(obfuscation_pattern_jmp);
+    for (size_t i = 0; i < section_count; i++)
+    {
+        const size_t section_size = pattern_get_section_size(obfuscation_pattern_jmp, i);
+        memset(segment_addresses[i], 0x90, section_size);
+    }
 
     x64_make_rel32_jmp(segment_addresses[0], va_source, va_target);
 

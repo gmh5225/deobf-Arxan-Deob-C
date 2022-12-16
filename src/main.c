@@ -131,7 +131,7 @@ static bool match_pattern(const uint8_t* address, const uint8_t* pattern, const 
     return true;
 }
 
-static void deobfuscation_pass(const struct deob_context* const context, const struct pattern_info* patterns, const size_t pattern_count)
+static void find_and_deobfuscate(const struct deob_context* const context, const struct pattern_info* patterns, const size_t pattern_count)
 {
     uint8_t* addr = context->deob_begin;
     uint8_t* stop = context->deob_end;
@@ -165,17 +165,76 @@ static void deobfuscation_pass(const struct deob_context* const context, const s
     }
 }
 
+static uintptr_t get_jmp_chain_target(const struct deob_context* context, const uint8_t* address)
+{
+    uintptr_t virtual_address = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(address - context->deob_begin));
+    uintptr_t target = 0;
+
+    while (address[0] == 0xE9)
+    {
+        target = x64_calc_rel32(virtual_address + 1, *(int32_t*)(address + 1), 0);
+
+        const uint32_t file_offset = virtual_address_to_file_offset(context->deob_begin, target);
+
+        if (file_offset == UINT32_MAX)
+        {
+            return 0;
+        }
+
+        virtual_address = target;
+        address = (context->deob_begin + file_offset);
+    }
+    return target;
+}
+
+static void skip_jmp_chains(const struct deob_context* context)
+{
+    uint8_t* addr = context->deob_begin;
+    uint8_t* stop = context->deob_end;
+
+    while (addr < stop)
+    {
+        if (addr[0] != 0xE9)
+        {
+            addr++;
+            continue;
+        }
+
+        const uintptr_t virtual_address = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(addr - context->deob_begin));
+        const uintptr_t initial_target = x64_calc_rel32(virtual_address + 1, *(int32_t*)(addr + 1), 0);
+        const uintptr_t target = get_jmp_chain_target(context, addr);
+
+        if (target == 0)
+        {
+            addr++;
+            continue;
+        }
+
+        if (target == initial_target)
+        {
+            addr++;
+            continue;
+        }
+
+        x64_make_rel32_jmp(addr, virtual_address, target);
+        fprintf(context->log_file, "Skipped one or more 'jmp's: %" PRIXPTR " -> %" PRIXPTR "\n", file_offset_to_virtual_address(context->deob_begin, (uint32_t)(addr - context->deob_begin)), target);
+
+        addr += 5;
+    }
+}
+
 static void deobfuscate(const struct deob_context* const context)
 {
-    deobfuscation_pass(context, obfuscation_patterns_stage_1, ARRAY_SIZE(obfuscation_patterns_stage_1));
-    deobfuscation_pass(context, obfuscation_patterns_stage_2, ARRAY_SIZE(obfuscation_patterns_stage_2));
+    find_and_deobfuscate(context, obfuscation_patterns_stage_1, ARRAY_SIZE(obfuscation_patterns_stage_1));
+    find_and_deobfuscate(context, obfuscation_patterns_stage_2, ARRAY_SIZE(obfuscation_patterns_stage_2));
+    skip_jmp_chains(context);
 }
 
 int main(int argc, char** argv)
 {
     if (argc < 2)
     {
-        printf("usage: arxandeobc dumpfile\n");
+        printf("usage: arxandeobc dumpfile.exe\n");
         return 1;
     }
 

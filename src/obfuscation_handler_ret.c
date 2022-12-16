@@ -2,6 +2,7 @@
 
 #include "obfuscation_handler_ret.h"
 
+#include "pattern.h"
 #include "x64_util.h"
 
 const uint8_t obfuscation_pattern_ret[21] =
@@ -20,8 +21,12 @@ bool obfuscation_handler_ret(const struct deob_context* const context, uint8_t**
 {
     (void)context;
 
-    memset(segment_addresses[0], 0x90, 5);
-    memset(segment_addresses[1], 0x90, 4);
+    const size_t section_count = pattern_get_section_count(obfuscation_pattern_ret);
+    for (size_t i = 0; i < section_count; i++)
+    {
+        const size_t section_size = pattern_get_section_size(obfuscation_pattern_ret, i);
+        memset(segment_addresses[i], 0x90, section_size);
+    }
 
     segment_addresses[0][0] = 0xC3;
 

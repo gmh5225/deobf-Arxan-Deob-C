@@ -67,16 +67,19 @@ bool obfuscation_handler_cjmp(const struct deob_context* const context, uint8_t*
     const uintptr_t jmp_to  = *(uintptr_t*)(segment_addresses[1] + 2);
     const uintptr_t cjmp_to = *(uintptr_t*)(segment_addresses[6] + 2);
 
+    const size_t section_count = pattern_get_section_count(obfuscation_pattern_cjmp);
+    for (size_t i = 0; i < section_count; i++)
+    {
+        const size_t section_size = pattern_get_section_size(obfuscation_pattern_cjmp, i);
+        memset(segment_addresses[i], 0x90, section_size);
+    }
+
     uintptr_t va_source = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(segment_addresses[0] - context->deob_begin));
     uintptr_t va_target = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(segment_addresses[1] - context->deob_begin));
 
     if (ptr_distance(va_source, va_target) >= 5)
     {
         x64_make_rel32_jmp(segment_addresses[0], va_source, va_target);
-    }
-    else
-    {
-        memset(segment_addresses[0], 0x90, 1);
     }
 
     va_source = file_offset_to_virtual_address(context->deob_begin, (uint32_t)(segment_addresses[1] - context->deob_begin));

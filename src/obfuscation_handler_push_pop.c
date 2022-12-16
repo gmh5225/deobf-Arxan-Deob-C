@@ -74,9 +74,11 @@ static bool handle_push_pop(uint8_t** segment_addresses, const uint8_t* pattern,
         return false;
     }
 
-    for (size_t i = 0; i < pattern_get_section_count(pattern); i++)
+    const size_t section_count = pattern_get_section_count(pattern);
+    for (size_t i = 0; i < section_count; i++)
     {
-        memset(segment_addresses[i], 0x90, pattern_get_section_size(pattern, i));
+        const size_t section_size = pattern_get_section_size(pattern, i);
+        memset(segment_addresses[i], 0x90, section_size);
     }
 
     const uint8_t opcode = opcode_base + (uint8_t)position;
